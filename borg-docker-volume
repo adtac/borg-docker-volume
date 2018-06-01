@@ -72,7 +72,7 @@ mnt_path=/mnt/docker-volume-$volume
 # before unmounting, there was an error inbetween (out of disk space, for
 # example), and we shouldn't start another backup before that error is
 # resolved, which will most likely require manual intervention.
-while [[ -f $mnt_path ]]; do
+while [[ -d $mnt_path ]]; do
   printf "[%s] waiting for $mnt_path to be unmounted\n" "$(date)"
   sleep 1
 done
