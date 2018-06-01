@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+
+set -e
+
+display_help() {
+  cat << help_msg
+Usage: borg-docker-volume OPTIONS
+Backup a Docker volume with Borg backup.
+
+Required arguments:
+  -b BORG_PATH            path to an existing borg repository
+  -v VOLUME_NAME          Docker volume name
+
+Optional arguments:
+  -h                      show this help message and exit
+help_msg
+
+  printf "%s" "${help_msg}"
+}
+
+container=
+volume=
+borg_path=
+
+while getopts "hb:c:s:v:" opt; do
+  case "$opt" in
+    h)
+      display_help
+      exit
+      ;;
+    b)
+      borg_path=$OPTARG
+      ;;
+    v)
+      volume=$OPTARG
+      ;;
+  esac
+done
+
+if [[ -z "$BORG_PASSPHRASE" ]]; then
+  echo "warning: BORG_PASSPHRASE is not set"
+fi
+
+if [[ -z "$borg_path" ]]; then
+  echo "error: the borg path flag -b is not set"
+  exit 1
+fi
+
+if [[ -z "$volume" ]]; then
+  echo "error: the volume name flag -v is not set"
+  exit 1
+fi
+
+backup_name=$volume-$(date +%Y%m%d%H%M%S)
+printf "backup name: %s\n" "$backup_name"
+
+data_path=$(docker volume inspect --format '{{.Mountpoint}}' "$volume")
+printf "data path: %s\n" "$data_path"
+
+# Why do a bind-mount instead of passing the directory to Borg directly? There
+# are two reasons:
+#   * Typically, Docker's volumes are stored under /var/lib/docker which does
+#     not have read permissions for non-root users. Mounting it will create a
+#     directory with the default permission 755, allowing us to run Borg
+#     without root.
+#   * Mounting it as read-only mount is simply safer because we're only going
+#     to be reading data. It's not that I don't trust Borg, but it's generally
+#     a good idea to not give more permissions than necessary.
+mnt_path=/mnt/docker-volume-$volume
+
+# Sleep and wait for the other backup to finish. If the other process exited
+# before unmounting, there was an error inbetween (out of disk space, for
+# example), and we shouldn't start another backup before that error is
+# resolved, which will most likely require manual intervention.
+while [[ -f $mnt_path ]]; do
+  printf "[%s] waiting for $mnt_path to be unmounted\n" "$(date)"
+  sleep 1
+done
+sudo mkdir $mnt_path
+sudo mount --bind -o ro $data_path $mnt_path
+
+# Why lz4? From my basic research, it seems lz4 has the least performance
+# impact and CPU load, which is important on servers running other services.
+# Source: https://catchchallenger.first-world.info/wiki/Quick_Benchmark:_Gzip_vs_Bzip2_vs_LZMA_vs_XZ_vs_LZ4_vs_LZO
+borg create --stats --compression lz4 $borg_path::$backup_name $mnt_path
+
+sudo umount $mnt_path
+sudo rm $mnt_path -vrf
