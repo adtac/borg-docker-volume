@@ -3,13 +3,13 @@
 This is a Bash script to backup a Docker volume's contents using [Borg backup](https://borgbackup.readthedocs.io/en/stable/).
 
 
-##### Requirements
+#### Requirements
 
 For a Bash script to backup Docker volumes using Borg, I'd be surprised if it had any dependency other than Bash, Docker, and Borg. To install Borg, follow the instructions provided [here](https://borgbackup.readthedocs.io/en/stable/installation.html).
 
 To run this script, you need to be in the list of users who can execute sudo (typically, `wheel`). This is because Docker volumes are read-only to root. See the source code for more comments on where `sudo` is used.
 
-##### Usage
+#### Usage
 
 First, create a Borg repository wherever you want your backups to be stored:
 
@@ -36,7 +36,7 @@ $ source /etc/borg_passphrase
 $ borg-docker-volume -b /path/to/borg/repository -v sqlite_volume
 ```
 
-##### License
+#### License
 
 ```
 Copyright 2018 Adhityaa Chandrasekar
